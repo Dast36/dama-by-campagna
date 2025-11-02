@@ -1,0 +1,472 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"/>
+  <title>Dama by Campagna</title>
+  <style>
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      font-family: Arial, sans-serif;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      background-color: #d7ccc8;
+      padding: 10px;
+      overflow: hidden;
+      position: relative;
+      height: 100vh;
+    }
+
+    h1 {
+      color: #5d4037;
+      margin: 8px 0;
+      font-size: min(6vw, 24px);
+      text-align: center;
+      text-shadow: 1px 1px 2px rgba(0,0,0,0.1);
+    }
+
+    #status {
+      margin: 8px 0;
+      font-size: min(5vw, 20px);
+      font-weight: bold;
+      color: #5d4037;
+      text-align: center;
+      height: 24px;
+    }
+
+    #board {
+      display: grid;
+      grid-template-columns: repeat(8, 1fr);
+      grid-template-rows: repeat(8, 1fr);
+      border: min(4px, 1.2vw) solid #5d4037;
+      margin: 10px auto;
+      box-shadow: 0 4px 8px rgba(0,0,0,0.3);
+      border-radius: min(4px, 1vw);
+      width: min(90vw, 90vh);
+      aspect-ratio: 1 / 1;
+      max-width: 90vw;
+      max-height: 90vh;
+    }
+
+    .cell {
+      display: flex;
+      justify-content: center;
+      align-items: center;
+    }
+
+    .cell.light-wood { background-color: #e6c9a8; }
+    .cell.dark-wood { background-color: #7b5e38; }
+
+    .piece {
+      width: 80%;
+      height: 80%;
+      border-radius: 50%;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      font-weight: bold;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.4);
+    }
+
+    .piece.white {
+      background-color: #f8f4e5;
+      border: min(2px, 0.8vw) solid #3e2723;
+      color: #3e2723;
+    }
+
+    .piece.black {
+      background-color: #2e1a0f;
+      border: min(2px, 0.8vw) solid #000;
+      color: #f5f5f5;
+    }
+
+    .piece.king::after {
+      content: "♔";
+      font-size: min(16px, 5vw);
+      color: gold;
+      text-shadow: 0 0 2px #000;
+    }
+
+    .selected {
+      outline: min(3px, 1vw) solid #ff5252;
+      outline-offset: min(-2px, -0.6vw);
+    }
+
+    .highlight {
+      outline: min(3px, 1vw) solid #4caf50;
+      outline-offset: min(-2px, -0.6vw);
+    }
+
+    #fireworks {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      pointer-events: none;
+      z-index: 100;
+      display: none;
+    }
+
+    .firework {
+      position: absolute;
+      font-size: min(24px, 8vw);
+      opacity: 0;
+      animation: explode 1.2s forwards;
+    }
+
+    @keyframes explode {
+      0% { transform: translate(0, 0); opacity: 1; }
+      100% { transform: translate(var(--tx), var(--ty)); opacity: 0; }
+    }
+
+    #lose-overlay, #win-overlay {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(0,0,0,0.85);
+      display: none;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      z-index: 200;
+      color: white;
+      font-size: min(48px, 16vw);
+      font-weight: bold;
+      text-align: center;
+      text-shadow: 0 0 10px red;
+    }
+
+    #win-overlay {
+      text-shadow: 0 0 10px gold;
+    }
+
+    #restart-btn {
+      margin-top: 20px;
+      background-color: #ff9800;
+      border: none;
+      padding: 10px 24px;
+      font-size: min(6vw, 20px);
+      border-radius: 8px;
+      cursor: pointer;
+      color: white;
+      font-weight: bold;
+      box-shadow: 0 2px 6px rgba(0,0,0,0.3);
+      transition: background 0.3s;
+    }
+
+    #restart-btn:hover {
+      background-color: #e68900;
+    }
+
+  </style>
+</head>
+<body>
+  <h1>Dama by Campagna</h1>
+  <div id="status">Tocca al Nero (tu)</div>
+  <div id="board"></div>
+
+  <div id="fireworks"></div>
+  <div id="lose-overlay">
+    Hai Perso!
+    <button id="restart-btn" onclick="initBoard()">Rinizia Gioco</button>
+  </div>
+  <div id="win-overlay">
+    Hai Vinto! 🎉
+    <button id="restart-btn" onclick="initBoard()">Rinizia Gioco</button>
+  </div>
+
+  <script>
+    let board = Array(8).fill(null).map(() => Array(8).fill(null));
+    let currentPlayer = 'black';
+    let selected = null;
+    let gameEnded = false;
+
+    function initBoard() {
+      gameEnded = false;
+      document.getElementById('fireworks').style.display = 'none';
+      document.getElementById('lose-overlay').style.display = 'none';
+      document.getElementById('win-overlay').style.display = 'none';
+      
+      board.forEach((row, r) => row.forEach((_, c) => board[r][c] = null));
+      for (let r = 0; r < 8; r++) {
+        for (let c = 0; c < 8; c++) {
+          if ((r + c) % 2 === 1) {
+            if (r < 3) {
+              board[r][c] = { player: 'white', king: false };
+            } else if (r > 4) {
+              board[r][c] = { player: 'black', king: false };
+            }
+          }
+        }
+      }
+      currentPlayer = 'black';
+      selected = null;
+      render();
+    }
+
+    function render() {
+      if (gameEnded) return;
+
+      const boardEl = document.getElementById('board');
+      boardEl.innerHTML = '';
+
+      let validDests = new Set();
+      if (selected) {
+        const moves = getValidMoves(selected.r, selected.c);
+        moves.forEach(m => {
+          validDests.add(`${m.toR},${m.toC}`);
+        });
+      }
+
+      for (let r = 0; r < 8; r++) {
+        for (let c = 0; c < 8; c++) {
+          const cell = document.createElement('div');
+          cell.classList.add('cell');
+          cell.classList.add((r + c) % 2 === 0 ? 'light-wood' : 'dark-wood');
+          cell.dataset.row = r;
+          cell.dataset.col = c;
+
+          const piece = board[r][c];
+          if (piece) {
+            const pieceEl = document.createElement('div');
+            pieceEl.classList.add('piece', piece.player);
+            if (piece.king) pieceEl.classList.add('king');
+            cell.appendChild(pieceEl);
+          }
+
+          if (selected && selected.r === r && selected.c === c) {
+            cell.classList.add('selected');
+          }
+
+          if (validDests.has(`${r},${c}`)) {
+            cell.classList.add('highlight');
+          }
+
+          cell.addEventListener('click', () => handleCellClick(r, c));
+          boardEl.appendChild(cell);
+        }
+      }
+
+      document.getElementById('status').textContent =
+        currentPlayer === 'black' ? 'Tocca al Nero (tu)' : 'Tocca al Bianco (AI)';
+    }
+
+    function handleCellClick(r, c) {
+      if (gameEnded) return;
+      const piece = board[r][c];
+
+      if (selected) {
+        const moves = getValidMoves(selected.r, selected.c);
+        const move = moves.find(m => m.toR === r && m.toC === c);
+        if (move) {
+          executeMove(move);
+          checkGameOver();
+          if (gameEnded) return;
+          selected = null;
+          render();
+          if (currentPlayer === 'white') {
+            setTimeout(makeAIMove, 600);
+          }
+        } else {
+          if (piece && piece.player === currentPlayer) {
+            selected = { r, c };
+            render();
+          } else {
+            selected = null;
+            render();
+          }
+        }
+        return;
+      }
+
+      if (piece && piece.player === currentPlayer) {
+        selected = { r, c };
+        render();
+      }
+    }
+
+    function getValidMoves(r, c) {
+      const piece = board[r][c];
+      if (!piece) return [];
+
+      const directions = [];
+      if (piece.king) {
+        directions.push([-1, -1], [-1, 1], [1, -1], [1, 1]);
+      } else {
+        if (piece.player === 'black') {
+          directions.push([-1, -1], [-1, 1]);
+        } else {
+          directions.push([1, -1], [1, 1]);
+        }
+      }
+
+      const moves = [];
+      let hasCapture = false;
+
+      for (const [dr, dc] of directions) {
+        const midR = r + dr;
+        const midC = c + dc;
+        const endR = r + 2 * dr;
+        const endC = c + 2 * dc;
+
+        if (endR >= 0 && endR < 8 && endC >= 0 && endC < 8) {
+          const midPiece = board[midR][midC];
+          const endPiece = board[endR][endC];
+          if (midPiece && midPiece.player !== piece.player && !endPiece) {
+            moves.push({
+              fromR: r,
+              fromC: c,
+              toR: endR,
+              toC: endC,
+              capture: { r: midR, c: midC }
+            });
+            hasCapture = true;
+          }
+        }
+      }
+
+      if (hasCapture) return moves;
+
+      for (const [dr, dc] of directions) {
+        const nr = r + dr;
+        const nc = c + dc;
+        if (nr >= 0 && nr < 8 && nc >= 0 && nc < 8 && !board[nr][nc]) {
+          moves.push({
+            fromR: r,
+            fromC: c,
+            toR: nr,
+            toC: nc,
+            capture: null
+          });
+        }
+      }
+
+      return moves;
+    }
+
+    function executeMove(move) {
+      const { fromR, fromC, toR, toC, capture } = move;
+      const piece = board[fromR][fromC];
+
+      board[toR][toC] = piece;
+      board[fromR][fromC] = null;
+
+      if (capture) {
+        board[capture.r][capture.c] = null;
+      }
+
+      if (!piece.king) {
+        if (piece.player === 'black' && toR === 0) {
+          board[toR][toC].king = true;
+        } else if (piece.player === 'white' && toR === 7) {
+          board[toR][toC].king = true;
+        }
+      }
+
+      currentPlayer = currentPlayer === 'black' ? 'white' : 'black';
+    }
+
+    function countPieces(player) {
+      let count = 0;
+      for (let r = 0; r < 8; r++) {
+        for (let c = 0; c < 8; c++) {
+          if (board[r][c] && board[r][c].player === player) {
+            count++;
+          }
+        }
+      }
+      return count;
+    }
+
+    function checkGameOver() {
+      const blackCount = countPieces('black');
+      const whiteCount = countPieces('white');
+
+      if (blackCount === 0) {
+        gameEnded = true;
+        document.getElementById('lose-overlay').style.display = 'flex';
+      } else if (whiteCount === 0) {
+        gameEnded = true;
+        document.getElementById('win-overlay').style.display = 'flex';
+        showFireworks();
+      }
+    }
+
+    function showFireworks() {
+      const container = document.getElementById('fireworks');
+      container.style.display = 'block';
+      container.innerHTML = '';
+
+      const emojis = ['🎇', '🎆', '✨', '💥', '🌟'];
+      const colors = ['#ff5252', '#ffeb3b', '#4caf50', '#2196f3', '#9c27b0'];
+
+      for (let i = 0; i < 40; i++) {
+        const firework = document.createElement('div');
+        firework.className = 'firework';
+        firework.textContent = emojis[Math.floor(Math.random() * emojis.length)];
+        firework.style.color = colors[Math.floor(Math.random() * colors.length)];
+
+        const x = Math.random() * 100;
+        const y = Math.random() * 100;
+        firework.style.left = `${x}%`;
+        firework.style.top = `${y}%`;
+
+        const tx = (Math.random() - 0.5) * window.innerWidth * 0.6;
+        const ty = (Math.random() - 0.5) * window.innerHeight * 0.6;
+        firework.style.setProperty('--tx', `${tx}px`);
+        firework.style.setProperty('--ty', `${ty}px`);
+
+        container.appendChild(firework);
+
+        setTimeout(() => firework.remove(), 1200);
+      }
+
+      setTimeout(() => container.style.display = 'none', 3000);
+    }
+
+    function makeAIMove() {
+      if (gameEnded) return;
+
+      const allMoves = [];
+      let hasCapture = false;
+
+      for (let r = 0; r < 8; r++) {
+        for (let c = 0; c < 8; c++) {
+          if (board[r][c] && board[r][c].player === 'white') {
+            const moves = getValidMoves(r, c);
+            for (const move of moves) {
+              allMoves.push(move);
+              if (move.capture) hasCapture = true;
+            }
+          }
+        }
+      }
+
+      let validMoves = allMoves;
+      if (hasCapture) {
+        validMoves = allMoves.filter(m => m.capture);
+      }
+
+      if (validMoves.length > 0) {
+        const move = validMoves[Math.floor(Math.random() * validMoves.length)];
+        executeMove(move);
+        checkGameOver();
+        if (!gameEnded) {
+          render();
+        }
+      }
+    }
+
+    initBoard();
+  </script>
+</body>
+</html>
